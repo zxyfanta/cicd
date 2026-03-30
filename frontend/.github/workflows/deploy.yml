@@ -1,0 +1,76 @@
+# GitHub Actions CI/CD 工作流配置
+# 功能：自动构建并部署 Vue 项目到 GitHub Pages
+
+# 触发条件
+on:
+  # 当代码推送到 main 分支时自动触发
+  push:
+    branches: [ main ]
+  # 允许在 GitHub 网页上手动触发工作流
+  workflow_dispatch:
+
+# 设置必要的权限
+permissions:
+  contents: read      # 读取代码内容
+  pages: write        # 写入 GitHub Pages
+  id-token: write     # 用于 OIDC 认证
+
+# 并发控制：避免同时运行多个部署任务
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # 任务1：构建项目
+  build:
+    name: 构建项目
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 步骤1：检出代码
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+      
+      # 步骤2：设置 Node.js 环境
+      - name: 🔧 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      
+      # 步骤3：安装项目依赖
+      - name: 📦 安装依赖
+        run: npm ci
+      
+      # 步骤4：运行代码检查（如果有配置）
+      - name: 🔍 代码检查
+        run: npm run lint --if-present
+      
+      # 步骤5：运行测试（如果有配置）
+      - name: 🧪 运行测试
+        run: npm run test --if-present
+      
+      # 步骤6：构建生产版本
+      - name: 🏗️ 构建项目
+        run: npm run build
+      
+      # 步骤7：上传构建产物
+      - name: 📤 上传构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  # 任务2：部署到 GitHub Pages
+  deploy:
+    name: 部署到 GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build  # 依赖 build 任务成功完成
+    
+    steps:
+      # 步骤8：部署
+      - name: 🚀 部署
+        id: deployment
+        uses: actions/deploy-pages@v4
